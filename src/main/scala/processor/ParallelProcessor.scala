@@ -1,7 +1,7 @@
 package processor
 
 import cats.effect.IO
-import domain.{OverallResult, Processor, SensorMeasurement}
+import domain.{OverallResult, SensorMeasurement}
 
 object ParallelProcessor extends Processor {
   override def getProcessorStream(inputStreams: Seq[fs2.Stream[IO, SensorMeasurement]])

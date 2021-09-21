@@ -4,26 +4,39 @@ import cats.effect.IO
 import cats.implicits.catsSyntaxOptionId
 import domain._
 
-object SequentialProcessor extends Processor {
+/**
+ * It uses sequential processing which is slower, but should be optimized in terms of memory
+ * as it has one accumulator
+ */
 
+object SequentialProcessor extends Processor {
   case class AccumulatedResult(
                                 sensorData: SensorDataAccumulated,
                                 successCount: Int,
                                 errorCount: Int
                               )
 
+  type SensorDataAccumulated = Map[String, Option[SensorAccumulatedResult]]
+
+  case class SensorAccumulatedResult(
+                                      min: Int,
+                                      averageAccumulator: AverageAccumulator,
+                                      max: Int)
+
+  case class AverageAccumulator(prevAvg: Float, currentValue: Int, number: Int)
+
   override def getProcessorStream(
                                    inputStreams: Seq[fs2.Stream[IO, SensorMeasurement]]
                                  ): fs2.Stream[IO, OverallResult] =
     inputStreams
       .fold(fs2.Stream.empty)((acc, stream) => acc ++ stream)
-      .fold(AccumulatedResult(Map.empty, 0, 0))((acc, elem) => {
-        val sensorDataAccumulated = acc.sensorData
+      .fold(AccumulatedResult(Map.empty, 0, 0))((accumulatedResult, thisStepSensorMeasurement) => {
+        val sensorDataAccumulated = accumulatedResult.sensorData
         val existingSensorAccumulator: Option[SensorAccumulatedResult] =
-          sensorDataAccumulated.get(elem.sensorName).flatten
+          sensorDataAccumulated.get(thisStepSensorMeasurement.sensorName).flatten
 
-        val sensorName = elem.sensorName
-        val optionalParsedValue = elem.value
+        val sensorName = thisStepSensorMeasurement.sensorName
+        val optionalParsedValue = thisStepSensorMeasurement.value
 
         optionalParsedValue match {
           case Some(parsedValue) =>
@@ -34,12 +47,13 @@ object SequentialProcessor extends Processor {
                 existingSensorAccumulator = existingSensorAccumulator,
                 sensorDataAccumulated = sensorDataAccumulated
               ),
-              successCount = acc.successCount + 1,
-              errorCount = acc.errorCount
+              successCount = accumulatedResult.successCount + 1,
+              errorCount = accumulatedResult.errorCount
             )
-
           case _ =>
-            getAccumulatorForInvalidValue(sensorName, existingSensorAccumulator, sensorDataAccumulated, acc)
+            getAccumulatorForInvalidValue(
+              sensorName, existingSensorAccumulator, sensorDataAccumulated, accumulatedResult
+            )
         }
       })
       .evalMap(accumulatedResult => {
@@ -52,11 +66,13 @@ object SequentialProcessor extends Processor {
                 avg = value.averageAccumulator.prevAvg,
                 max = value.max)
             )
+
             sensorName -> sensorResult
           })
           .sortWith((t1, t2) => {
             val leftAverage = t1._2.map(_.avg).getOrElse(-1.0)
             val rightAverage = t2._2.map(_.avg).getOrElse(-1.0)
+
             leftAverage > rightAverage
           })
           .toMap
@@ -98,18 +114,14 @@ object SequentialProcessor extends Processor {
         SensorAccumulatedResult(
           min = sensorValue.min min validValue,
           averageAccumulator = newAverageAccumulator,
-          max = sensorValue.max max validValue,
-          successCounter = sensorValue.successCounter + 1,
-          errorCounter = sensorValue.errorCounter
+          max = sensorValue.max max validValue
         ).some
       case None =>
         val newSensorDefaultAccumulator =
           SensorAccumulatedResult(
             min = validValue,
             averageAccumulator = AverageAccumulator(validValue, validValue, 1),
-            max = validValue,
-            successCounter = 1,
-            errorCounter = 0
+            max = validValue
           )
         newSensorDefaultAccumulator.some
     }
@@ -124,10 +136,8 @@ object SequentialProcessor extends Processor {
                                              acc: AccumulatedResult
                                            ): AccumulatedResult = {
     val sensorData = existingSensorAccumulator match {
-      case Some(value) =>
-        sensorDataAccumulated.updated(sensorName, value.copy(errorCounter = value.errorCounter + 1).some)
-      case _ =>
-        sensorDataAccumulated.updated(sensorName, None)
+      case Some(value) => sensorDataAccumulated
+      case _ => sensorDataAccumulated.updated(sensorName, None)
     }
 
     AccumulatedResult(

@@ -6,7 +6,7 @@ import cats.implicits.catsSyntaxOptionId
 import processor.SequentialProcessor
 
 class ProcessorSpec extends AnyFlatSpec {
-  "THe result of a simple stream" should "be calculated" in {
+  "The result of a list of streams" should "be calculated" in {
     val s1 = "s1"
     val s2 = "s2"
     val s3 = "s3"
@@ -47,7 +47,7 @@ class ProcessorSpec extends AnyFlatSpec {
     assertResult(expectedOverallResult)(resultIO.unsafeRunSync())
   }
 
-  "The results of simple streams with the same elements but different order" should "be the same" in {
+  "The results for simple streams with the same elements but different order" should "be the same" in {
     val s1 = "s1"
     val s2 = "s2"
 
