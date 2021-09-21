@@ -1,6 +1,7 @@
 package processor
 
 import cats.effect.IO
+import cats.implicits.catsSyntaxOptionId
 import domain._
 
 object SequentialProcessor extends Processor {
