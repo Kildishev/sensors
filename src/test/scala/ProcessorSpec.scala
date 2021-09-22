@@ -3,10 +3,12 @@ import domain.{OverallResult, SensorMeasurement, SensorResult}
 import org.scalatest.flatspec.AnyFlatSpec
 import cats.effect.unsafe.implicits.global
 import cats.implicits.catsSyntaxOptionId
-import processor.SequentialProcessor
+import processor.{Processor, SequentialProcessor}
 
 class ProcessorSpec extends AnyFlatSpec {
   "The result of a list of streams" should "be calculated" in {
+    val processor: Processor = SequentialProcessor
+
     val s1 = "s1"
     val s2 = "s2"
     val s3 = "s3"
@@ -30,7 +32,7 @@ class ProcessorSpec extends AnyFlatSpec {
     )
 
     val resultIO = for {
-      result <- SequentialProcessor.getProcessorStream(Seq(inputStream, inputStream2, inputStream3)).compile.last
+      result <- processor.getProcessorStream(Seq(inputStream, inputStream2, inputStream3)).compile.last
     } yield result
 
     val expectedOverallResult = OverallResult(
@@ -48,6 +50,8 @@ class ProcessorSpec extends AnyFlatSpec {
   }
 
   "The results for simple streams with the same elements but different order" should "be the same" in {
+    val processor: Processor = SequentialProcessor
+
     val s1 = "s1"
     val s2 = "s2"
 
@@ -64,8 +68,8 @@ class ProcessorSpec extends AnyFlatSpec {
     val inputStream2 = fs2.Stream.emits[IO, SensorMeasurement](inputList.sortBy(_.value))
 
     val resultIO = for {
-      result <- SequentialProcessor.getProcessorStream(Seq(inputStream)).compile.last
-      result2 <- SequentialProcessor.getProcessorStream(Seq(inputStream2)).compile.last
+      result <- processor.getProcessorStream(Seq(inputStream)).compile.last
+      result2 <- processor.getProcessorStream(Seq(inputStream2)).compile.last
     } yield result == result2
 
     assert(resultIO.unsafeRunSync())
