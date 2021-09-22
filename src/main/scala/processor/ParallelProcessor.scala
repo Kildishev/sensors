@@ -2,7 +2,7 @@ package processor
 
 import cats.effect.IO
 import cats.implicits.{catsSyntaxOptionId, catsSyntaxSemigroup}
-import cats.kernel.Semigroup
+import cats.kernel.{Monoid, Semigroup}
 import domain.{OverallResult, SensorMeasurement, SensorResult}
 
 object ParallelProcessor extends Processor {
@@ -147,23 +147,27 @@ object ParallelProcessor extends Processor {
       count = x.count + y.count,
     )
 
+  implicit val sensorSummaryDataMonoid: Monoid[Option[SensorSummaryData]] = new Monoid[Option[SensorSummaryData]] {
+    override def empty: Option[SensorSummaryData] = None
+
+    override def combine(x: Option[SensorSummaryData], y: Option[SensorSummaryData]): Option[SensorSummaryData] =
+      (x, y) match {
+        case (Some(x), Some(y)) => (x |+| y).some
+        case (Some(x), None) => x.some
+        case (None, Some(y)) => y.some
+        case _ => None
+      }
+  }
+
   private def squashTwoResults(l: SensorSummaryDataMap, r: SensorSummaryDataMap): SensorSummaryDataMap = {
     val merged: Seq[(SensorName, Option[SensorSummaryData])] = l.toSeq ++ r.toSeq
-
     val groupedBySensorName: Map[SensorName, Seq[(SensorName, Option[SensorSummaryData])]] = merged.groupBy(_._1)
 
     val result: Map[SensorName, Option[SensorSummaryData]] = groupedBySensorName.map(tuple => {
       val sensorName = tuple._1
       val sensorData: List[Option[SensorSummaryData]] = tuple._2.map(_._2).toList
 
-      def combine(a: Option[SensorSummaryData], b: Option[SensorSummaryData]): Option[SensorSummaryData] = (a, b) match {
-        case (Some(a), Some(b)) => (a |+| b).some
-        case (Some(a), _) => a.some
-        case (_, Some(b)) => b.some
-        case _ => None
-      }
-
-      sensorName -> sensorData.foldLeft[Option[SensorSummaryData]](None)(combine)
+      sensorName -> Monoid[Option[SensorSummaryData]].combineAll(sensorData)
     })
 
     result
