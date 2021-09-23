@@ -4,12 +4,13 @@ import cats.effect.IO
 import cats.implicits.{catsSyntaxOptionId, catsSyntaxSemigroup}
 import cats.kernel.{Monoid, Semigroup}
 import domain.{OverallResult, SensorMeasurement, SensorResult}
+import fs2.Stream
 
 object ParallelProcessor extends Processor {
-  override def getProcessorStream(inputStreams: Seq[fs2.Stream[IO, SensorMeasurement]])
-  : fs2.Stream[IO, OverallResult] = {
-    val streams = fs2.Stream.emits(inputStreams.map(linearProcessor))
-    val result: fs2.Stream[IO, SteamOverallData] = squashStreams(streams, 4)
+  override def getProcessorStream(inputStreams: Seq[Stream[IO, SensorMeasurement]])
+  : Stream[IO, OverallResult] = {
+    val streams = Stream.emits(inputStreams.map(linearProcessor))
+    val result: Stream[IO, SteamOverallData] = squashStreams(streams, 4)
 
     result
       .through(s => calculateResult(s, inputStreams.length))
@@ -44,7 +45,7 @@ object ParallelProcessor extends Processor {
 
   private val defaultOverallData = SteamOverallData(0, 0, Map.empty)
 
-  private def linearProcessor(inputStream: fs2.Stream[IO, SensorMeasurement]): fs2.Stream[IO, SteamOverallData] = {
+  private def linearProcessor(inputStream: Stream[IO, SensorMeasurement]): Stream[IO, SteamOverallData] = {
     inputStream
       .fold(defaultOverallData)((acc, elem) => {
         val sensorName = elem.sensorName
@@ -95,9 +96,9 @@ object ParallelProcessor extends Processor {
   }
 
   private def squashStreams(
-                             streams: fs2.Stream[IO, fs2.Stream[IO, SteamOverallData]],
+                             streams: Stream[IO, Stream[IO, SteamOverallData]],
                              parNumber: Int,
-                           ): fs2.Stream[IO, SteamOverallData] = {
+                           ): Stream[IO, SteamOverallData] = {
     streams.parJoin(parNumber).fold(defaultOverallData)((acc, elem) => {
       val squashedMaps: SensorSummaryDataMap = squashTwoResults(acc.sensorData, elem.sensorData)
 
@@ -110,9 +111,9 @@ object ParallelProcessor extends Processor {
   }
 
   private def calculateResult(
-                               input: fs2.Stream[IO, SteamOverallData],
+                               input: Stream[IO, SteamOverallData],
                                streamCount: Int,
-                             ): fs2.Stream[IO, OverallResult] = {
+                             ): Stream[IO, OverallResult] = {
     val result = input.compile.last
       .map(_.map(data => {
         val sensorData: Map[SensorName, Option[SensorResult]] = data.sensorData.map(tuple => {
@@ -136,7 +137,7 @@ object ParallelProcessor extends Processor {
         )
       }).getOrElse(OverallResult(0, 0, 0, Map.empty)))
 
-    fs2.Stream.eval(result)
+    Stream.eval(result)
   }
 
   implicit val sensorSummaryDataSemigroup: Semigroup[SensorSummaryData] =

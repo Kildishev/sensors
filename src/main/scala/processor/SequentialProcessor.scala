@@ -3,6 +3,7 @@ package processor
 import cats.effect.IO
 import cats.implicits.catsSyntaxOptionId
 import domain._
+import fs2.Stream
 
 /**
  * It uses sequential processing which is slower, but should be optimized in terms of memory
@@ -26,10 +27,10 @@ object SequentialProcessor extends Processor {
   case class AverageAccumulator(prevAvg: Float, currentValue: Int, number: Int)
 
   override def getProcessorStream(
-                                   inputStreams: Seq[fs2.Stream[IO, SensorMeasurement]]
-                                 ): fs2.Stream[IO, OverallResult] =
+                                   inputStreams: Seq[Stream[IO, SensorMeasurement]]
+                                 ): Stream[IO, OverallResult] =
     inputStreams
-      .fold(fs2.Stream.empty)((acc, stream) => acc ++ stream)
+      .fold(Stream.empty)((acc, stream) => acc ++ stream)
       .fold(AccumulatedResult(Map.empty, 0, 0))((accumulatedResult, thisStepSensorMeasurement) => {
         val sensorDataAccumulated = accumulatedResult.sensorData
         val existingSensorAccumulator: Option[SensorAccumulatedResult] =

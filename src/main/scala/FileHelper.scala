@@ -2,13 +2,14 @@ import cats.effect.IO
 import domain.SensorMeasurement
 import fs2.io.file.{Files, Path}
 import fs2.text
+import fs2.Stream
 
 import java.io.File
 import java.nio.file.Paths
 import scala.util.Try
 
 object FileHelper {
-  def getStreamFromPath(filePath: Path): fs2.Stream[IO, SensorMeasurement] = {
+  def getStreamFromPath(filePath: Path): Stream[IO, SensorMeasurement] = {
     Files[IO].readAll(filePath)
       .through(text.utf8.decode)
       .through(text.lines)

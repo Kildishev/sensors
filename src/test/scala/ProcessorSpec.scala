@@ -4,6 +4,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import cats.effect.unsafe.implicits.global
 import cats.implicits.catsSyntaxOptionId
 import processor.{ParallelProcessor, Processor, SequentialProcessor}
+import fs2.Stream
 
 class ProcessorSpec extends AnyFlatSpec {
   val processors: Seq[Processor] = List(SequentialProcessor, ParallelProcessor)
@@ -14,19 +15,19 @@ class ProcessorSpec extends AnyFlatSpec {
       val s2 = "s2"
       val s3 = "s3"
 
-      val inputStream = fs2.Stream[IO, SensorMeasurement](
+      val inputStream = Stream[IO, SensorMeasurement](
         SensorMeasurement(s1, Some(0)),
         SensorMeasurement(s1, None),
         SensorMeasurement(s1, Some(5)),
       )
 
-      val inputStream2 = fs2.Stream[IO, SensorMeasurement](
+      val inputStream2 = Stream[IO, SensorMeasurement](
         SensorMeasurement(s2, Some(10)),
         SensorMeasurement(s1, Some(10)),
         SensorMeasurement(s2, Some(10)),
       )
 
-      val inputStream3 = fs2.Stream[IO, SensorMeasurement](
+      val inputStream3 = Stream[IO, SensorMeasurement](
         SensorMeasurement(s3, None),
         SensorMeasurement(s3, None),
         SensorMeasurement(s2, Some(100)),
@@ -65,8 +66,8 @@ class ProcessorSpec extends AnyFlatSpec {
         SensorMeasurement(s2, Some(10)),
         SensorMeasurement(s2, Some(5)),
       )
-      val inputStream = fs2.Stream.emits[IO, SensorMeasurement](inputList)
-      val inputStream2 = fs2.Stream.emits[IO, SensorMeasurement](inputList.sortBy(_.value))
+      val inputStream = Stream.emits[IO, SensorMeasurement](inputList)
+      val inputStream2 = Stream.emits[IO, SensorMeasurement](inputList.sortBy(_.value))
 
       val resultIO = for {
         result <- processor.getProcessorStream(Seq(inputStream)).compile.last
